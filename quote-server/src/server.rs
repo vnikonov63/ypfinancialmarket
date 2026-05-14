@@ -1,6 +1,7 @@
 use std::{
     io::{BufRead, BufReader, Write},
     net::TcpStream,
+    result,
     sync::{Arc, Mutex},
 };
 
@@ -35,16 +36,65 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                         if let (Some(address), Some(tickers)) = (address, tickers) {
                             "YOU SEND COMMAND STREAM".to_string()
                         } else {
-                            "ERROR: usage STREAM udp://127.0.0.1:<port_number> <tick1>,<tick2>,...,<tick[n]>\n".to_string()
+                            "ERROR: usage STREAM udp://127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n>\n".to_string()
                         }
                     }
-                    Some("GET") => "YOU SEND COMMAND GET\n".to_string(),
-                    Some("GET_MANY") => "YOU SEND COMMAND GET_MANY\n".to_string(),
+                    Some("GET") => {
+                        if let Some(ticker_str) = parts.next() {
+                            let ticker_str = ticker_str.trim();
+                            let m = stock_market.lock().unwrap();
+                            match m.stocks.get(ticker_str) {
+                                Some(stock) => stock.to_string(),
+                                None => "ERROR: ticker not found\n".to_string(),
+                            }
+                        } else {
+                            "ERROR: usage GET <ticker>\n".to_string()
+                        }
+                    }
+                    Some("GET_MANY") => {
+                        if let Some(tickers_str) = parts.next() {
+                            let m = stock_market.lock().unwrap();
+                            let mut result = String::new();
+                            for ticker in tickers_str.split(',') {
+                                let ticker = ticker.trim();
+
+                                match m.stocks.get(ticker) {
+                                    Some(stock) => {
+                                        result.push_str(&stock.to_string());
+                                        result.push('\n');
+                                    }
+                                    None => {
+                                        result.push_str(&format!(
+                                            "ERROR: ticker {ticker} not found\n"
+                                        ));
+                                    }
+                                }
+                            }
+
+                            result
+                        } else {
+                            "ERROR: usage GET_MANY <ticker-1>,<ticker-2>,...,<ticker-n>\n"
+                                .to_string()
+                        }
+                    }
                     Some("GET_TOTAL_VOLUME") => {
-                        let mut m = stock_market.lock().unwrap();
+                        let m = stock_market.lock().unwrap();
                         format!("{}\n", m.total_volume)
                     }
-                    Some("LIST") => "YOU SEND COMMAND LIST\n".to_string(),
+                    Some("LIST") => {
+                        if let Some(str) = parts.next() {
+                            "ERROR: usage LIST\n".to_string()
+                        } else {
+                            let m = stock_market.lock().unwrap();
+                            let mut result = String::new();
+                            for stock in m.stocks.values() {
+                                result.push_str(&stock.to_string());
+                                result.push('\n');
+                            }
+
+                            result
+                        }
+                    }
                     Some("PING") => "YOU SEND COMMAND PING\n".to_string(),
                     Some("CONNECTIONS") => "YOU SEND COMMAND CONNECTIONS\n".to_string(),
                     Some("HELP") => "YOU SEND COMMAND HELP\n".to_string(),
