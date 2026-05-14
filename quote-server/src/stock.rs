@@ -3,6 +3,7 @@ use std::{
     fmt,
     fs::File,
     io::{self, BufRead, BufReader},
+    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -168,8 +169,8 @@ impl StockQuote {
 }
 
 impl StockMarket {
-    pub fn new() -> std::io::Result<Self> {
-        let file = File::open("data/tickers.txt")?;
+    pub fn new(ticker_path: PathBuf) -> std::io::Result<Self> {
+        let file = File::open(ticker_path)?;
         let reader = BufReader::new(file);
 
         let mut stocks = HashMap::new();
