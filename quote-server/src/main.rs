@@ -13,7 +13,9 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:7878")?;
     println!("Server is listening on port 7878");
 
-    let stock_market = Arc::new(Mutex::new(StockMarket::new()));
+    let stock_market = StockMarket::new()?;
+    println!("{:?}", stock_market);
+    let stock_market = Arc::new(Mutex::new(stock_market));
 
     for stream in listener.incoming() {
         match stream {

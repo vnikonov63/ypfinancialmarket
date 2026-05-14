@@ -40,6 +40,7 @@ pub fn handle_client(stream: TcpStream, market: Arc<Mutex<StockMarket>>) {
                     }
                     Some("GET") => "YOU SEND COMMAND GET\n".to_string(),
                     Some("GET_MANY") => "YOU SEND COMMAND GET_MANY\n".to_string(),
+                    Some("GET_TOTAL_VOLUME") => "YOU SEND COMMAND GET_TOTAL_VOLUME\n".to_string(),
                     Some("LIST") => "YOU SEND COMMAND LIST\n".to_string(),
                     Some("PING") => "YOU SEND COMMAND PING\n".to_string(),
                     Some("CONNECTIONS") => "YOU SEND COMMAND CONNECTIONS\n".to_string(),

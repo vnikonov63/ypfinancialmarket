@@ -1,6 +1,10 @@
-use std::collections::HashMap;
-use std::fmt;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    fmt,
+    fs::File,
+    io::{self, BufRead, BufReader},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Debug, Clone)]
 pub struct StockQuote {
@@ -10,6 +14,7 @@ pub struct StockQuote {
     pub timestamp: u64,
 }
 
+#[derive(Debug, Clone)]
 pub struct StockMarket {
     pub stocks: HashMap<String, StockQuote>,
     pub total_volume: u32,
@@ -43,8 +48,38 @@ impl StockQuote {
     }
 
     // make sure that this has a really random thing and the fake random one
+    // using the Rust feature technique.
     pub fn random() -> Self {
         todo!()
+    }
+
+    pub fn fake_random_for_ticker(ticker: &str) -> Self {
+        Self {
+            ticker: ticker.to_string(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            price: Self::fake_random_price(),
+            volume: Self::fake_random_volume(),
+        }
+    }
+    fn fake_random_price() -> f64 {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos();
+
+        50.0 + (nanos % 25_000) as f64 / 100.0
+    }
+
+    fn fake_random_volume() -> u32 {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos();
+
+        100 + nanos % 25_000
     }
 
     pub fn from_string(s: &str) -> Option<Self> {
@@ -81,10 +116,21 @@ impl StockQuote {
 }
 
 impl StockMarket {
-    pub fn new() -> Self {
-        Self {
-            stocks: HashMap::new(),
-            total_volume: 0,
+    pub fn new() -> std::io::Result<Self> {
+        let file = File::open("data/tickers.txt")?;
+        let reader = BufReader::new(file);
+
+        let mut stocks = HashMap::new();
+        let mut total_volume: u32 = 0;
+        for line in reader.lines() {
+            let ticker = line?;
+            let stock = StockQuote::fake_random_for_ticker(ticker.as_str());
+            total_volume += stock.volume;
+            stocks.insert(ticker, stock);
         }
+        Ok(Self {
+            stocks,
+            total_volume,
+        })
     }
 }
