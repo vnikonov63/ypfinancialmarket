@@ -6,7 +6,7 @@ use std::{
 
 use crate::stock::StockMarket;
 
-pub fn handle_client(stream: TcpStream, market: Arc<Mutex<StockMarket>>) {
+pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
     let mut writer = stream.try_clone().expect("failed to clone stream");
     let mut reader = BufReader::new(stream);
 
@@ -40,7 +40,10 @@ pub fn handle_client(stream: TcpStream, market: Arc<Mutex<StockMarket>>) {
                     }
                     Some("GET") => "YOU SEND COMMAND GET\n".to_string(),
                     Some("GET_MANY") => "YOU SEND COMMAND GET_MANY\n".to_string(),
-                    Some("GET_TOTAL_VOLUME") => "YOU SEND COMMAND GET_TOTAL_VOLUME\n".to_string(),
+                    Some("GET_TOTAL_VOLUME") => {
+                        let mut m = stock_market.lock().unwrap();
+                        format!("{}\n", m.total_volume)
+                    }
                     Some("LIST") => "YOU SEND COMMAND LIST\n".to_string(),
                     Some("PING") => "YOU SEND COMMAND PING\n".to_string(),
                     Some("CONNECTIONS") => "YOU SEND COMMAND CONNECTIONS\n".to_string(),
