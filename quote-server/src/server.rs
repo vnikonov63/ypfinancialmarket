@@ -10,7 +10,7 @@ pub fn handle_client(stream: TcpStream, market: Arc<Mutex<StockMarket>>) {
     let mut writer = stream.try_clone().expect("failed to clone stream");
     let mut reader = BufReader::new(stream);
 
-    let _ = writer.write_all(b"Welcome to the ypfinancialmarket. Your resource for being up to date with the latest financial information");
+    let _ = writer.write_all(b"Welcome to the ypfinancialmarket. Your resource for being up to date with the latest financial information\n");
     let _ = writer.flush();
 
     let mut line = String::new();
@@ -33,29 +33,17 @@ pub fn handle_client(stream: TcpStream, market: Arc<Mutex<StockMarket>>) {
                         let tickers = parts.next();
 
                         if let (Some(address), Some(tickers)) = (address, tickers) {
-                            todo!()
+                            "YOU SEND COMMAND STREAM".to_string()
                         } else {
                             "ERROR: usage STREAM udp://127.0.0.1:<port_number> <tick1>,<tick2>,...,<tick[n]>\n".to_string()
                         }
                     }
-                    Some("GET") => {
-                        todo!()
-                    }
-                    Some("GET_MANY") => {
-                        todo!()
-                    }
-                    Some("LIST") => {
-                        todo!()
-                    }
-                    Some("PING") => {
-                        todo!()
-                    }
-                    Some("CONNECTIONS") => {
-                        todo!()
-                    }
-                    Some("HELP") => {
-                        todo!()
-                    }
+                    Some("GET") => "YOU SEND COMMAND GET\n".to_string(),
+                    Some("GET_MANY") => "YOU SEND COMMAND GET_MANY\n".to_string(),
+                    Some("LIST") => "YOU SEND COMMAND LIST\n".to_string(),
+                    Some("PING") => "YOU SEND COMMAND PING\n".to_string(),
+                    Some("CONNECTIONS") => "YOU SEND COMMAND CONNECTIONS\n".to_string(),
+                    Some("HELP") => "YOU SEND COMMAND HELP\n".to_string(),
                     _ => "ERROR: Unknown command\n".to_string(),
                 };
 

@@ -79,3 +79,12 @@ impl StockQuote {
         Self::from_string(s)
     }
 }
+
+impl StockMarket {
+    pub fn new() -> Self {
+        Self {
+            stocks: HashMap::new(),
+            total_volume: 0,
+        }
+    }
+}
