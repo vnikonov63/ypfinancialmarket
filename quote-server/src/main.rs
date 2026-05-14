@@ -1,3 +1,4 @@
+mod server;
 mod stock;
 
 fn main() {
