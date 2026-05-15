@@ -12,6 +12,7 @@ use crate::{server::handle_client, stock::StockMarket};
 
 mod server;
 mod stock;
+mod udpsender;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

@@ -1,11 +1,13 @@
 use std::{
+    collections::HashSet,
     io::{BufRead, BufReader, Write},
     net::TcpStream,
-    result,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicBool},
+    thread,
 };
 
 use crate::stock::StockMarket;
+use crate::udpsender::StockMarketSenderUDP;
 
 pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
     let mut writer = stream.try_clone().expect("failed to clone stream");
@@ -29,12 +31,55 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                 }
                 let mut parts = input.split_whitespace();
                 let response = match parts.next() {
+                    //TODO: make sure the user provides udp:://127.0.0.1:<port number>
+                    // for now it would just be 127.0.0.1:<port number>
                     Some("STREAM") => {
                         let address = parts.next();
                         let tickers = parts.next();
 
-                        if let (Some(address), Some(tickers)) = (address, tickers) {
-                            "YOU SEND COMMAND STREAM".to_string()
+                        if let (Some(address), Some(tickers_str)) = (address, tickers) {
+                            let m = stock_market.lock().unwrap();
+                            let mut tickers: HashSet<String> = HashSet::new();
+                            let mut error: Option<String> = None;
+
+                            for ticker in tickers_str.split(',') {
+                                let ticker = ticker.trim();
+
+                                match m.stocks.get(ticker) {
+                                    Some(_) => {
+                                        tickers.insert(ticker.to_string());
+                                    }
+                                    None => {
+                                        error = Some(format!(
+                                            "ERROR: Unable to subscribe to broadcast. One of the tickers: {} is invalid\n",
+                                            ticker
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+                            drop(m);
+
+                            if let Some(e) = error {
+                                e
+                            } else {
+                                let stop = Arc::new(AtomicBool::new(false));
+                                // NOTE: port 0 mean the OS should pick the port for us.
+                                let sender = StockMarketSenderUDP::new(
+                                    "0.0.0.0:0",
+                                    tickers,
+                                    Arc::clone(&stop),
+                                    Arc::clone(&stock_market),
+                                )
+                                .unwrap();
+                                let target = address.to_string();
+                                thread::spawn(move || {
+                                    if let Err(e) = sender.start_broadcasting(&target, 1000) {
+                                        eprintln!("UDP broadcast error: {}", e);
+                                    }
+                                });
+                                "Subscribed to stream\n".to_string()
+                            }
                         } else {
                             "ERROR: usage STREAM udp://127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n>\n".to_string()
                         }

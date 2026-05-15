@@ -1,3 +1,5 @@
+use rkyv::{Archive, Deserialize, Serialize};
+
 use std::{
     collections::HashMap,
     fmt,
@@ -7,7 +9,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Archive, Deserialize, Serialize)]
 pub struct StockQuote {
     pub ticker: String,
     pub price: f64,
