@@ -1,9 +1,13 @@
 use std::{
     collections::HashSet,
     io::{BufRead, BufReader, Write},
-    net::TcpStream,
-    sync::{Arc, Mutex, atomic::AtomicBool},
+    net::{TcpStream, UdpSocket},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
+    time::{Duration, Instant},
 };
 
 use crate::stock::StockMarket;
@@ -58,12 +62,22 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                     }
                                 }
                             }
+                            // We no longer need m lock at this point, so we should drop it.
+                            // We want to minimize the time when a Mutex is locked. We may rely
+                            // on the implicit drop when m goes out of scope, but this would
+                            // require rewriting the function and creating helpers, increasing the
+                            // levels of abstraction that are not good for the learning process.
                             drop(m);
 
                             if let Some(e) = error {
                                 e
                             } else {
                                 let stop = Arc::new(AtomicBool::new(false));
+                                /* let stop_clone = Arc::clone(&stop);
+
+                                // Here again the OS would pick the port for the nonblocking UDP.
+                                start_udp_ping_monitor("0.0.0.0:0", stop_clone, 5); */
+
                                 // NOTE: port 0 mean the OS should pick the port for us.
                                 let sender = StockMarketSenderUDP::new(
                                     "0.0.0.0:0",
@@ -74,7 +88,9 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                 .unwrap();
                                 let target = address.to_string();
                                 thread::spawn(move || {
-                                    if let Err(e) = sender.start_broadcasting(&target, 1000) {
+                                    if let Err(e) =
+                                        sender.start_broadcasting_with_ping(&target, 1000)
+                                    {
                                         eprintln!("UDP broadcast error: {}", e);
                                     }
                                 });
@@ -127,7 +143,7 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                         format!("{}\n", m.total_volume)
                     }
                     Some("LIST") => {
-                        if let Some(str) = parts.next() {
+                        if let Some(_) = parts.next() {
                             "ERROR: usage LIST\n".to_string()
                         } else {
                             let m = stock_market.lock().unwrap();
@@ -140,9 +156,13 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                             result
                         }
                     }
-                    Some("PING") => "YOU SEND COMMAND PING\n".to_string(),
+                    Some("PIN_TCP") => "YOU SEND COMMAND PING\n".to_string(),
                     Some("CONNECTIONS") => "YOU SEND COMMAND CONNECTIONS\n".to_string(),
-                    Some("HELP") => "YOU SEND COMMAND HELP\n".to_string(),
+                    Some("HELP") => {
+                        format!(
+                            "Available commands are:\nSTREAM udp://127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n>\nGET <ticker>\nGET_MANY <ticker-1>,<ticker-2>,...,<ticker-n>\nGET_TOTAL_VOLUME\nLIST\nPING_TCP\n"
+                        )
+                    }
                     _ => "ERROR: Unknown command\n".to_string(),
                 };
 
