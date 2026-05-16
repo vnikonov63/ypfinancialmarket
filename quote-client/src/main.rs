@@ -26,6 +26,7 @@ enum ConnectionResult {
 
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
+    // TODO: reaplce this with connect function below
     let mut tcp_stream = TcpStream::connect(args.addr_tcp)?;
     let mut reader = BufReader::new(tcp_stream.try_clone()?);
 
@@ -110,8 +111,82 @@ fn connect_tcp(addr: &SocketAddr) -> io::Result<TcpStream> {
     Ok(stream)
 }
 
-fn handle_connection(stream: TcpStream) -> ConnectionResult {
-    todo!()
+fn handle_connection(tcp_stream: TcpStream) -> ConnectionResult {
+    let mut reader = match tcp_stream.try_clone() {
+        Ok(s) => BufReader::new(s),
+        Err(e) => {
+            eprintln!("Failed to clone the tcp_stream {}", e);
+            return ConnectionResult::Lost;
+        }
+    };
+
+    // Fist we are reading the initial greeting message
+    for _ in 0..1 {
+        let mut greeting = String::new();
+        if let Err(e) = reader.read_line(&mut greeting) {
+            eprintln!("Failed to read server's greeting: {}", e);
+            return ConnectionResult::Lost;
+        }
+        print!("{}", greeting);
+    }
+
+    // Only then we start an infinite loop where we send the commands to the Server
+    loop {
+        print!("ypfinancialmarket>");
+        if let Err(e) = stdout().flush() {
+            eprintln!("Fail to flush the stdout: {}", e);
+            return ConnectionResult::Lost;
+        }
+
+        let mut input = String::new();
+        if let Err(e) = stdin().read_line(&mut input) {
+            eprintln!("Failed to read server's greeting: {}", e);
+            return ConnectionResult::Lost;
+        }
+        let trimmed_input = input.trim();
+
+        if trimmed_input.is_empty() {
+            continue;
+        }
+
+        //TODO: Understand how it is possible to go though multiple lines, because server will
+        //reply to us using mutliple lines and not just one.
+
+        // We send the EXIT command to the server, now it is time to close the client
+        // Because in this case we are ending prematurely and are not calling the send_command()
+        // function. We never recieved the farewell message and never displayed it,
+        // We need to show something in here. This means on the server side there is
+        // no need to create anything fancy inside the EXIT, it would be unreachable code.
+        if trimmed_input.eq_ignore_ascii_case("EXIT") {
+            return ConnectionResult::Exit;
+        }
+
+        //TODO: inrduce the logs for both this application and the server
+        if trimmed_input.eq_ignore_ascii_case("PING") {
+            match send_ping(&tcp_stream, &mut reader) {
+                Ok(latency) => println!("PONG (latency: {}ms)", latency),
+                Err(e) => {
+                    eprintln!("ERROR: while recieving a ping from the server {}", e);
+                    return ConnectionResult::Lost;
+                }
+            }
+            // we do not want to go inside the send_command section
+            continue;
+        }
+
+        match send_command(&tcp_stream, &mut reader, trimmed_input) {
+            Ok(output) => {
+                println!("{}", output);
+            }
+            Err(e) => {
+                eprintln!(
+                    "ERROR: while sending or recieving a command from the server {}",
+                    e
+                );
+                return ConnectionResult::Lost;
+            }
+        }
+    }
 }
 
 fn send_ping(stream: &TcpStream, reader: &mut BufReader<TcpStream>) -> io::Result<u64> {

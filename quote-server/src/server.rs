@@ -1,8 +1,12 @@
 use std::{
-    collections::HashSet, io::{BufRead, BufReader, Write}, net::{TcpStream}, sync::{
+    collections::HashSet,
+    io::{BufRead, BufReader, Write},
+    net::TcpStream,
+    sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
-    }, thread
+    },
+    thread,
 };
 
 use crate::stock::StockMarket;
@@ -15,7 +19,7 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
     let _ = writer.write_all(b"Welcome to the ypfinancialmarket. Your resource for being up to date with the latest financial information\n");
     let _ = writer.flush();
 
-    let mut udp_stop_flags : Vec<Arc<AtomicBool>> = Vec::new();
+    let mut udp_stop_flags: Vec<Arc<AtomicBool>> = Vec::new();
 
     let mut line = String::new();
     loop {
@@ -152,18 +156,17 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                         }
                     }
                     Some("PING_TCP") => "YOU SEND COMMAND PING\n".to_string(),
-                    Some("OPEN_UDP_CONNECTIONS") => {
-                        udp_stop_flags.iter().filter(|stop_flag| !stop_flag.load(Ordering::Relaxed)).count().to_string()
-                    }
-                    Some("ALL_UDP_CONNECTIONS") => {
-                        udp_stop_flags.len().to_string()
-                    }
+                    Some("OPEN_UDP_CONNECTIONS") => udp_stop_flags
+                        .iter()
+                        .filter(|stop_flag| !stop_flag.load(Ordering::Relaxed))
+                        .count()
+                        .to_string(),
+                    Some("ALL_UDP_CONNECTIONS") => udp_stop_flags.len().to_string(),
                     Some("EXIT") => {
                         let _ = writer.write_all(b"BYE\n");
                         let _ = writer.flush();
 
                         break;
-
                     }
                     Some("HELP") => {
                         format!(
