@@ -92,10 +92,13 @@ fn connect_tcp(addr: &SocketAddr) -> io::Result<TcpStream> {
             &TcpKeepalive::new()
                 .with_interval(Duration::from_secs(1))
                 .with_time(Duration::from_secs(5)),
-        );
+        )?;
     }
 
-    socket.connect(&addr.clone().into());
+    // We can write socket.connect(&addr.clone().into())
+    // But this would mean we are doing the clone when a cheaper copy is
+    // available
+    socket.connect(&(*addr).into())?;
     let stream: TcpStream = socket.into();
 
     // Even though to read from the stream we are using the BufReader wrapper
@@ -124,5 +127,19 @@ fn send_command(
 ) -> io::Result<String> {
     let mut stream = stream;
 
-    todo!()
+    stream.write_all(command.as_bytes())?;
+    stream.write_all(b"\n")?;
+    stream.flush()?;
+
+    let mut respnse = String::new();
+    let size_response = reader.read_line(&mut respnse)?;
+
+    if size_response == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "Server closed connection",
+        ));
+    }
+
+    Ok(respnse)
 }
