@@ -1,10 +1,11 @@
 use clap::Parser;
-use socket2::{Domain, Protocol, Socket, Type};
+use socket2::{Domain, Protocol, Socket, TcpKeepalive, Type};
 
 use std::{
     io::{self, BufRead, BufReader, Write, stdin, stdout},
     net::{SocketAddr, TcpStream},
     path::PathBuf,
+    time::Duration,
 };
 
 #[derive(Parser, Debug)]
@@ -76,8 +77,34 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-fn connect_tcp(addr: SocketAddr) -> io::Result<TcpStream> {
-    todo!()
+fn connect_tcp(addr: &SocketAddr) -> io::Result<TcpStream> {
+    let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))?;
+
+    //
+    socket.set_keepalive(true)?;
+
+    // This is the conditional execution of code.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        use std::time::Duration;
+
+        socket.set_tcp_keepalive(
+            &TcpKeepalive::new()
+                .with_interval(Duration::from_secs(1))
+                .with_time(Duration::from_secs(5)),
+        );
+    }
+
+    socket.connect(&addr.clone().into());
+    let stream: TcpStream = socket.into();
+
+    // Even though to read from the stream we are using the BufReader wrapper
+    // we are still essentially reading from the TcpStream
+    // and this means, that we are dealing with the read timeout of this socket
+    // and we need to control it so it does not block everything forever
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+
+    Ok(stream)
 }
 
 fn handle_connection(stream: TcpStream) -> ConnectionResult {
