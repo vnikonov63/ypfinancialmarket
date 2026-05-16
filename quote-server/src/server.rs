@@ -56,7 +56,7 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                     }
                                     None => {
                                         error = Some(format!(
-                                            "ERROR: Unable to subscribe to broadcast. One of the tickers: {} is invalid\n",
+                                            "1\nERROR: Unable to subscribe to broadcast. One of the tickers: {} is invalid\n",
                                             ticker
                                         ));
                                         break;
@@ -93,10 +93,10 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                         eprintln!("UDP broadcast error: {}", e);
                                     }
                                 });
-                                "Subscribed to stream\n".to_string()
+                                "1\nSubscribed to stream\n".to_string()
                             }
                         } else {
-                            "ERROR: usage STREAM udp://127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n>\n".to_string()
+                            "1\nERROR: usage STREAM udp://127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n>\n".to_string()
                         }
                     }
                     Some("GET") => {
@@ -104,21 +104,28 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                             let ticker_str = ticker_str.trim();
                             let m = stock_market.lock().unwrap();
                             match m.stocks.get(ticker_str) {
-                                Some(stock) => stock.to_string(),
-                                None => "ERROR: ticker not found\n".to_string(),
+                                Some(stock) => format!("1\n{}\n", stock),
+                                None => "1\nERROR: ticker not found\n".to_string(),
                             }
                         } else {
-                            "ERROR: usage GET <ticker>\n".to_string()
+                            "1\nERROR: usage GET <ticker>\n".to_string()
                         }
                     }
                     Some("GET_MANY") => {
                         if let Some(tickers_str) = parts.next() {
                             let m = stock_market.lock().unwrap();
-                            let mut result = String::new();
-                            for ticker in tickers_str.split(',') {
-                                let ticker = ticker.trim();
+                            let tickers: Vec<&str> = tickers_str
+                                .split(',')
+                                .map(|t| t.trim())
+                                .filter(|t| !t.is_empty())
+                                .collect();
 
-                                match m.stocks.get(ticker) {
+                            let mut result = String::new();
+
+                            result.push_str(&format!("{}\n", tickers.len()));
+
+                            for ticker in &tickers {
+                                match m.stocks.get(*ticker) {
                                     Some(stock) => {
                                         result.push_str(&stock.to_string());
                                         result.push('\n');
@@ -133,17 +140,17 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
 
                             result
                         } else {
-                            "ERROR: usage GET_MANY <ticker-1>,<ticker-2>,...,<ticker-n>\n"
+                            "1\nERROR: usage GET_MANY <ticker-1>,<ticker-2>,...,<ticker-n>"
                                 .to_string()
                         }
                     }
                     Some("GET_TOTAL_VOLUME") => {
                         let m = stock_market.lock().unwrap();
-                        format!("{}\n", m.total_volume)
+                        format!("1\n{}\n", m.total_volume)
                     }
                     Some("LIST") => {
                         if let Some(_) = parts.next() {
-                            "ERROR: usage LIST\n".to_string()
+                            "1\nERROR: usage LIST\n".to_string()
                         } else {
                             let m = stock_market.lock().unwrap();
                             let mut result = String::new();
@@ -162,15 +169,11 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                         .count()
                         .to_string(),
                     Some("ALL_UDP_CONNECTIONS") => udp_stop_flags.len().to_string(),
-                    Some("EXIT") => {
-                        let _ = writer.write_all(b"BYE\n");
-                        let _ = writer.flush();
-
-                        break;
-                    }
+                    // In out client we are sending the bye message, ni need to add anything in
+                    // here. Although this may create complications when we are testing with nc
+                    Some("EXIT") => break,
                     Some("HELP") => {
-                        format!(
-                            "Available commands are:
+                            "12\nAvailable commands are:
                                 1. STREAM 127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n> - Create a 
                                     broadcast to the provided address where you will recieve live financial data 
                                     updates every second, excluding the first one.
@@ -182,10 +185,10 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                 7. OPEN_UDP_CONNECTIONS - Get the number of open UDP connections in this session.
                                 8. ALL_UDP_CONNECTIONS - Get the number of the total UDP connections in this session.
                                 9. EXIT
-                                \n"
-                        )
+                                \n".to_string()
+                        
                     }
-                    _ => "ERROR: Unknown command\n".to_string(),
+                    _ => "1\nERROR: Unknown command\n".to_string(),
                 };
 
                 let _ = writer.write_all(response.as_bytes());

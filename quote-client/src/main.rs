@@ -2,7 +2,7 @@ use clap::Parser;
 use socket2::{Domain, Protocol, Socket, TcpKeepalive, Type};
 
 use std::{
-    io::{self, BufRead, BufReader, Write, stdin, stdout},
+    io::{self, BufRead, BufReader, LineWriter, Write, stdin, stdout},
     net::{SocketAddr, TcpStream},
     path::PathBuf,
     thread,
@@ -150,7 +150,7 @@ fn handle_connection(tcp_stream: TcpStream) -> ConnectionResult {
 
         match send_command(&tcp_stream, &mut reader, trimmed_input) {
             Ok(output) => {
-                println!("{}", output);
+                print!("{}", output);
             }
             Err(e) => {
                 eprintln!(
@@ -176,19 +176,46 @@ fn send_command(
 ) -> io::Result<String> {
     let mut stream = stream;
 
+    // send command
     stream.write_all(command.as_bytes())?;
     stream.write_all(b"\n")?;
     stream.flush()?;
 
-    let mut respnse = String::new();
-    let size_response = reader.read_line(&mut respnse)?;
+    // recieve the header - number of lines in the putput
+    let mut response_header = String::new();
+    let size_response_header = reader.read_line(&mut response_header)?;
 
-    if size_response == 0 {
+    if size_response_header == 0 {
         return Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
             "Server closed connection",
         ));
     }
 
-    Ok(respnse)
+    let number_lines = match response_header.trim().parse::<usize>() {
+        Ok(n) => n,
+        Err(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid response header (not a number)",
+            ));
+        }
+    };
+
+    // read n lines specified in the response_header
+    let mut response = String::new();
+
+    for _ in 0..number_lines {
+        let mut line = String::new();
+        let response_line_size = reader.read_line(&mut line)?;
+        if response_line_size == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Server closed connection mid response",
+            ));
+        }
+        response.push_str(&line);
+    }
+
+    Ok(response)
 }
