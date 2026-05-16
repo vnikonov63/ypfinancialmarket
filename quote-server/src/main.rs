@@ -19,10 +19,12 @@ mod udpsender;
 struct Args {
     #[arg(short = 'a', long, default_value = "127.0.0.1:7878")]
     addr_tcp: SocketAddr,
-    #[arg(short = 't', long, default_value = "data/tickers.txt")]
+    #[arg(short = 'f', long, default_value = "data/tickers.txt")]
     ticker_list_path: PathBuf,
-    #[arg(short = 'p', long, default_value_t = 7879)]
-    port_udp: u16,
+    // I think I should not use this one, because I am creating multiple UDP
+    // connections.
+    /* #[arg(short = 'p', long, default_value_t = 7879)]
+    port_udp: u16, */
 }
 
 fn main() -> std::io::Result<()> {
