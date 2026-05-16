@@ -1,7 +1,8 @@
 use clap::Parser;
+use socket2::{Domain, Protocol, Socket, Type};
 
 use std::{
-    io::{BufRead, BufReader, Write, stdin, stdout},
+    io::{self, BufRead, BufReader, Write, stdin, stdout},
     net::{SocketAddr, TcpStream},
     path::PathBuf,
 };
@@ -15,6 +16,11 @@ struct Args {
     addr_udp: SocketAddr,
     #[arg(short = 'f', long, default_value = "data/chosen_tickers.txt")]
     ticker_lsit_path: PathBuf,
+}
+
+enum ConnectionResult {
+    Lost,
+    Exit,
 }
 
 fn main() -> std::io::Result<()> {
@@ -31,7 +37,7 @@ fn main() -> std::io::Result<()> {
 
     // Only then we start an infinite loop where we send the commands to the Server
     loop {
-        println!("ypfinancialmarket>");
+        print!("ypfinancialmarket>");
         stdout().flush()?;
 
         let mut input = String::new();
@@ -68,4 +74,28 @@ fn main() -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+fn connect_tcp(addr: SocketAddr) -> io::Result<TcpStream> {
+    todo!()
+}
+
+fn handle_connection(stream: TcpStream) -> ConnectionResult {
+    todo!()
+}
+
+fn send_ping(stream: &TcpStream, reader: &mut BufReader<TcpStream>) -> io::Result<u64> {
+    let mut stream = stream;
+
+    todo!()
+}
+
+fn send_command(
+    stream: &TcpStream,
+    reader: &mut BufReader<TcpStream>,
+    command: &str,
+) -> io::Result<String> {
+    let mut stream = stream;
+
+    todo!()
 }
