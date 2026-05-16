@@ -1,8 +1,8 @@
 use std::{
-    collections::HashSet, fmt::format, io::{BufRead, BufReader, Write}, net::{TcpStream, UdpSocket}, sync::{
+    collections::HashSet, io::{BufRead, BufReader, Write}, net::{TcpStream}, sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
-    }, thread, time::{Duration, Instant}
+    }, thread
 };
 
 use crate::stock::StockMarket;
@@ -22,7 +22,7 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
         line.clear();
         match reader.read_line(&mut line) {
             Ok(0) => {
-                return;
+                break;
             }
             Ok(_) => {
                 let input = line.trim();
@@ -162,10 +162,7 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                         let _ = writer.write_all(b"BYE\n");
                         let _ = writer.flush();
 
-                        for stop_flag in udp_stop_flags {
-                            stop_flag.store(true, Ordering::Relaxed);
-                        }
-                        return;
+                        break;
 
                     }
                     Some("HELP") => {
@@ -192,8 +189,12 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                 let _ = writer.flush();
             }
             Err(_) => {
-                return;
+                break;
             }
         }
+    }
+
+    for stop_flag in udp_stop_flags {
+        stop_flag.store(true, Ordering::Relaxed);
     }
 }
