@@ -6,7 +6,7 @@ use std::{
     net::{SocketAddr, TcpStream},
     path::PathBuf,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Parser, Debug)]
@@ -136,7 +136,7 @@ fn handle_connection(tcp_stream: TcpStream) -> ConnectionResult {
         }
 
         //TODO: inrduce the logs for both this application and the server
-        if trimmed_input.eq_ignore_ascii_case("PING") {
+        if trimmed_input.eq_ignore_ascii_case("PING_TCP") {
             match send_ping(&tcp_stream, &mut reader) {
                 Ok(latency) => println!("PONG (latency: {}ms)", latency),
                 Err(e) => {
@@ -166,7 +166,30 @@ fn handle_connection(tcp_stream: TcpStream) -> ConnectionResult {
 fn send_ping(stream: &TcpStream, reader: &mut BufReader<TcpStream>) -> io::Result<u64> {
     let mut stream = stream;
 
-    todo!()
+    let start = Instant::now();
+    stream.write_all(b"PING_TCP\n")?;
+    stream.flush()?;
+
+    let mut buffer = String::new();
+    let bytes = reader.read_line(&mut buffer)?;
+
+    if bytes == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "Server closed connection",
+        ));
+    }
+
+    let elapsed = start.elapsed().as_millis() as u64;
+
+    if buffer.trim().eq_ignore_ascii_case("PONG") {
+        Ok(elapsed)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid PING response",
+        ))
+    }
 }
 
 fn send_command(

@@ -6,7 +6,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    thread,
+    thread, time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use crate::stock::StockMarket;
@@ -162,13 +162,27 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                             result
                         }
                     }
-                    Some("PING_TCP") => "YOU SEND COMMAND PING\n".to_string(),
-                    Some("OPEN_UDP_CONNECTIONS") => udp_stop_flags
-                        .iter()
-                        .filter(|stop_flag| !stop_flag.load(Ordering::Relaxed))
-                        .count()
-                        .to_string(),
-                    Some("ALL_UDP_CONNECTIONS") => udp_stop_flags.len().to_string(),
+                    // TODO: maybe it is valid to put this inside the separate thread? 
+                    Some("PING_TCP") => {
+                        use std::collections::hash_map::DefaultHasher;
+                        use std::hash::{Hash, Hasher};
+
+                        let mut hasher = DefaultHasher::new();
+                        SystemTime::now().hash(&mut hasher);
+                        let hash = hasher.finish();
+
+                        // 200 - 1200 ms of timeoout
+                        let fake_random_timeout = 200 + (hash % 10000 / 10);
+
+                        thread::sleep(Duration::from_millis(fake_random_timeout));
+                        // there is no need to add the header here as the user does not see this
+                        // output
+                        "PONG\n".to_string()
+                    }
+                    Some("OPEN_UDP_CONNECTIONS") => {
+                        format!("1\n{}", udp_stop_flags.iter().filter(|stop_flag| !stop_flag.load(Ordering::Relaxed)).count())
+                    }
+                    Some("ALL_UDP_CONNECTIONS") => format!("1\n{}", udp_stop_flags.len()),
                     // In out client we are sending the bye message, ni need to add anything in
                     // here. Although this may create complications when we are testing with nc
                     Some("EXIT") => break,
