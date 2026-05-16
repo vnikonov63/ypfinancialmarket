@@ -1,13 +1,8 @@
 use std::{
-    collections::HashSet,
-    io::{BufRead, BufReader, Write},
-    net::{TcpStream, UdpSocket},
-    sync::{
+    collections::HashSet, fmt::format, io::{BufRead, BufReader, Write}, net::{TcpStream, UdpSocket}, sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
-    },
-    thread,
-    time::{Duration, Instant},
+    }, thread, time::{Duration, Instant}
 };
 
 use crate::stock::StockMarket;
@@ -19,6 +14,8 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
 
     let _ = writer.write_all(b"Welcome to the ypfinancialmarket. Your resource for being up to date with the latest financial information\n");
     let _ = writer.flush();
+
+    let mut udp_stop_flags : Vec<Arc<AtomicBool>> = Vec::new();
 
     let mut line = String::new();
     loop {
@@ -73,10 +70,8 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                 e
                             } else {
                                 let stop = Arc::new(AtomicBool::new(false));
-                                /* let stop_clone = Arc::clone(&stop);
-
-                                // Here again the OS would pick the port for the nonblocking UDP.
-                                start_udp_ping_monitor("0.0.0.0:0", stop_clone, 5); */
+                                let stop_clone = Arc::clone(&stop);
+                                udp_stop_flags.push(stop_clone);
 
                                 // NOTE: port 0 mean the OS should pick the port for us.
                                 let sender = StockMarketSenderUDP::new(
@@ -156,11 +151,38 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                             result
                         }
                     }
-                    Some("PIN_TCP") => "YOU SEND COMMAND PING\n".to_string(),
-                    Some("CONNECTIONS") => "YOU SEND COMMAND CONNECTIONS\n".to_string(),
+                    Some("PING_TCP") => "YOU SEND COMMAND PING\n".to_string(),
+                    Some("OPEN_UDP_CONNECTIONS") => {
+                        udp_stop_flags.iter().filter(|stop_flag| !stop_flag.load(Ordering::Relaxed)).count().to_string()
+                    }
+                    Some("ALL_UDP_CONNECTIONS") => {
+                        udp_stop_flags.len().to_string()
+                    }
+                    Some("EXIT") => {
+                        let _ = writer.write_all(b"BYE\n");
+                        let _ = writer.flush();
+
+                        for stop_flag in udp_stop_flags {
+                            stop_flag.store(true, Ordering::Relaxed);
+                        }
+                        return;
+
+                    }
                     Some("HELP") => {
                         format!(
-                            "Available commands are:\nSTREAM udp://127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n>\nGET <ticker>\nGET_MANY <ticker-1>,<ticker-2>,...,<ticker-n>\nGET_TOTAL_VOLUME\nLIST\nPING_TCP\n"
+                            "Available commands are:
+                                1. STREAM 127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n> - Create a 
+                                    broadcast to the provided address where you will recieve live financial data 
+                                    updates every second, excluding the first one.
+                                2. GET <ticker> - Get latest financial information for the given ticker.
+                                3. GET_MANY <ticker-1>,<ticker-2>,...,<ticker-n> - Get the latest financial information for the given tickers.
+                                4. GET_TOTAL_VOLUME - sekf explanatory namimg.
+                                5. LIST - Dump all of the latest financial information.
+                                6. PING_TCP - TODO:
+                                7. OPEN_UDP_CONNECTIONS - Get the number of open UDP connections in this session.
+                                8. ALL_UDP_CONNECTIONS - Get the number of the total UDP connections in this session.
+                                9. EXIT
+                                \n"
                         )
                     }
                     _ => "ERROR: Unknown command\n".to_string(),
