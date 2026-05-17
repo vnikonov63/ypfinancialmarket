@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 clap = {version = "4.6.1", features = ["derive"] }
 rand = "0.10.1"
+rkyv = "0.8.16"
 socket2 = "0.6.3"

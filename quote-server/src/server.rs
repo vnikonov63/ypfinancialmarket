@@ -6,7 +6,8 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    thread, time::{Duration, SystemTime, UNIX_EPOCH},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use crate::stock::StockMarket;
@@ -200,7 +201,6 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                 8. ALL_UDP_CONNECTIONS - Get the number of the total UDP connections in this session.
                                 9. EXIT
                                 \n".to_string()
-                        
                     }
                     _ => "1\nERROR: Unknown command\n".to_string(),
                 };

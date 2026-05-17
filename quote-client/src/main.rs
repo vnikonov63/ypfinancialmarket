@@ -1,9 +1,11 @@
 use clap::Parser;
+use rkyv::{Archive, Deserialize, Serialize};
 use socket2::{Domain, Protocol, Socket, TcpKeepalive, Type};
 
 use std::{
-    io::{self, BufRead, BufReader, LineWriter, Write, stdin, stdout},
-    net::{SocketAddr, TcpStream},
+    fmt,
+    io::{self, BufRead, BufReader, Write, stdin, stdout},
+    net::{SocketAddr, TcpStream, UdpSocket},
     path::PathBuf,
     thread,
     time::{Duration, Instant},
@@ -25,6 +27,27 @@ enum ConnectionResult {
     Exit,
 }
 
+// We are having two applications on purpuse, this is part of the exercise as I understand
+// So I will add the StockQuote datastructure again, DRY isn't always the answer
+
+#[derive(Debug, Clone, Archive, Deserialize, Serialize)]
+pub struct StockQuote {
+    ticker: String,
+    price: f64,
+    volume: u32,
+    timestamp: u64,
+}
+
+impl fmt::Display for StockQuote {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}|{}|{}|{}",
+            self.ticker, self.price, self.volume, self.timestamp
+        )
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -35,7 +58,7 @@ fn main() {
         match connect_tcp(&args.addr_tcp) {
             Ok(tcp_stream) => {
                 println!("Connected to the server!");
-                match handle_connection(tcp_stream) {
+                match handle_connection(tcp_stream, &args.addr_udp) {
                     ConnectionResult::Exit => break,
                     ConnectionResult::Lost => {
                         eprintln!("Failed to connec to the serer, retrying in 2s...");
@@ -85,7 +108,7 @@ fn connect_tcp(addr: &SocketAddr) -> io::Result<TcpStream> {
 }
 
 // Not that we are passing the ownership of the tcp_stream inside the handle_connection function
-fn handle_connection(tcp_stream: TcpStream) -> ConnectionResult {
+fn handle_connection(tcp_stream: TcpStream, udp_addr: &SocketAddr) -> ConnectionResult {
     let mut reader = match tcp_stream.try_clone() {
         Ok(s) => BufReader::new(s),
         Err(e) => {
@@ -145,6 +168,29 @@ fn handle_connection(tcp_stream: TcpStream) -> ConnectionResult {
                 }
             }
             // we do not want to go inside the send_command section
+            continue;
+        }
+
+        if trimmed_input.starts_with("STREAM") {
+            let udp_socket = match UdpSocket::bind(udp_addr) {
+                Ok(udp_socket) => udp_socket,
+                Err(e) => {
+                    eprintln!("ERROR: while trying to open a UDP connection: {}", e);
+                    return ConnectionResult::Lost;
+                }
+            };
+            match send_command(&tcp_stream, &mut reader, trimmed_input) {
+                Ok(output) => print!("{}", output),
+                Err(e) => {
+                    eprintln!("ERROR: while sending the STREAM command: {}", e);
+                    return ConnectionResult::Lost;
+                }
+            }
+
+            if let Err(e) = handle_udp(udp_socket) {
+                eprintln!("ERROR: while displaying the UDP Stream: {}", e);
+                return ConnectionResult::Lost;
+            }
             continue;
         }
 
@@ -242,3 +288,42 @@ fn send_command(
 
     Ok(response)
 }
+
+fn handle_udp(socket: UdpSocket) -> io::Result<()> {
+    #[repr(align(16))]
+    struct AlignedBuf([u8; 65536]);
+    let mut buf = AlignedBuf([0u8; 65536]);
+
+    println!("Expecting data...");
+
+    // TODO: add the ability to send pings in here.
+
+    loop {
+        let size = socket.recv(&mut buf.0)?;
+        match rkyv::from_bytes::<Vec<StockQuote>, rkyv::rancor::Error>(&buf.0[..size]) {
+            Ok(quotes) => {
+                for q in &quotes {
+                    println!("{}", q);
+                }
+            }
+            Err(e) => eprintln!("Failed to decode UDP data: {}", e),
+        }
+    }
+}
+
+// fn handle_udp(socket: UdpSocket) -> io::Result<()> {
+//     let mut buf = [0u8; 1024];
+//     println!("Expecting data...!");
+//
+//     // TODO: add the ability to send PINGs, otherwise I would only see 3 lines before it is over.
+//     loop {
+//         let size = socket.recv(&mut buf)?;
+//         match rkyv::from_bytes::<Vec<StockQuote>>(&buf[..size]) {
+//             Ok(quotes) => {
+//
+//             }
+//             Err(e) =>
+//         }
+//     }
+//     todo!()
+// }
