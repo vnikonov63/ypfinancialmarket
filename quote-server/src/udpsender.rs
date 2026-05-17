@@ -14,7 +14,7 @@ use std::{
 use crate::stock::{StockMarket, StockQuote};
 
 pub struct StockMarketSenderUDP {
-    socket: UdpSocket,
+    pub socket: UdpSocket,
     tickers: HashSet<String>,
     stock_market: Arc<Mutex<StockMarket>>,
     stop: Arc<AtomicBool>,

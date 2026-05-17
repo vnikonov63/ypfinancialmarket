@@ -180,17 +180,29 @@ fn handle_connection(tcp_stream: TcpStream, udp_addr: &SocketAddr) -> Connection
                 }
             };
             match send_command(&tcp_stream, &mut reader, trimmed_input) {
-                Ok(output) => print!("{}", output),
+                Ok(output) => {
+                    print!("{}", output);
+
+                    let output_line_by_line = output.split('\n').collect::<Vec<&str>>();
+                    let port: u16 = match output_line_by_line[1].parse() {
+                        Ok(p) => p,
+                        Err(e) => {
+                            eprintln!("ERROR: cannot parse the provided port number: {}", e);
+                            return ConnectionResult::Lost;
+                        }
+                    };
+
+                    if let Err(e) = handle_udp(udp_socket, port) {
+                        eprintln!("ERROR: while displaying the UDP Stream: {}", e);
+                        return ConnectionResult::Lost;
+                    }
+                }
                 Err(e) => {
                     eprintln!("ERROR: while sending the STREAM command: {}", e);
                     return ConnectionResult::Lost;
                 }
             }
 
-            if let Err(e) = handle_udp(udp_socket) {
-                eprintln!("ERROR: while displaying the UDP Stream: {}", e);
-                return ConnectionResult::Lost;
-            }
             continue;
         }
 
@@ -289,14 +301,37 @@ fn send_command(
     Ok(response)
 }
 
-fn handle_udp(socket: UdpSocket) -> io::Result<()> {
+fn handle_udp(socket: UdpSocket, port: u16) -> io::Result<()> {
+    let server_addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let ping_socket = socket.try_clone()?;
+
+    thread::spawn(move || {
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+            time::SystemTime,
+        };
+
+        loop {
+            let mut hasher = DefaultHasher::new();
+            SystemTime::now().hash(&mut hasher);
+            let hash = hasher.finish();
+
+            // 1s - 2s (We check every 500ms ) and declare the connection stale after 5s
+            // So this should be enough
+            let fake_random_timeout = 1000 + (hash % 10000 / 10);
+            thread::sleep(Duration::from_millis(fake_random_timeout));
+            if ping_socket.send_to(b"PING_UDP", server_addr).is_err() {
+                break;
+            }
+        }
+    });
+
     #[repr(align(16))]
     struct AlignedBuf([u8; 65536]);
     let mut buf = AlignedBuf([0u8; 65536]);
 
     println!("Expecting data...");
-
-    // TODO: add the ability to send pings in here.
 
     loop {
         let size = socket.recv(&mut buf.0)?;
@@ -310,20 +345,3 @@ fn handle_udp(socket: UdpSocket) -> io::Result<()> {
         }
     }
 }
-
-// fn handle_udp(socket: UdpSocket) -> io::Result<()> {
-//     let mut buf = [0u8; 1024];
-//     println!("Expecting data...!");
-//
-//     // TODO: add the ability to send PINGs, otherwise I would only see 3 lines before it is over.
-//     loop {
-//         let size = socket.recv(&mut buf)?;
-//         match rkyv::from_bytes::<Vec<StockQuote>>(&buf[..size]) {
-//             Ok(quotes) => {
-//
-//             }
-//             Err(e) =>
-//         }
-//     }
-//     todo!()
-// }

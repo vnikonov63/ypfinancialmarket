@@ -80,12 +80,14 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
 
                                 // NOTE: port 0 mean the OS should pick the port for us.
                                 let sender = StockMarketSenderUDP::new(
-                                    "0.0.0.0:0",
+                                    "127.0.0.1:0",
                                     tickers,
                                     Arc::clone(&stop),
                                     Arc::clone(&stock_market),
                                 )
                                 .unwrap();
+                                //TODO: remove this unwrap here, when cleaning the code.
+                                let port = sender.socket.local_addr().unwrap().port();
                                 let target = address.to_string();
                                 thread::spawn(move || {
                                     if let Err(e) =
@@ -94,7 +96,8 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                         eprintln!("UDP broadcast error: {}", e);
                                     }
                                 });
-                                "1\nSubscribed to stream\n".to_string()
+                                format!("2\nSubscribed to stream on port:\n{}\n", port)
+                                //"1\nSubscribed to stream\n".to_string()
                             }
                         } else {
                             "1\nERROR: usage STREAM udp://127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n>\n".to_string()
