@@ -31,7 +31,9 @@ struct Args {
 fn main() -> std::io::Result<()> {
     // To see logs run with RUST_LOG=level_of_choice cargo run
     // The selevs are LOWEST IMPORTANCE trace -> debug -> info -> warn -> error HIGHEST_IMPORTANCE
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .init();
 
     let args = Args::parse();
     let listener = TcpListener::bind(args.addr_tcp)?;

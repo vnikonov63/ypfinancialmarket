@@ -1,3 +1,4 @@
+use log::error;
 use rkyv::rancor::Error;
 
 use std::{
@@ -38,7 +39,8 @@ impl StockMarketSenderUDP {
         })
     }
 
-    fn send_to(&self, target_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+    #[tracing::instrument(skip(self))]
+    fn send_to_udp(&self, target_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
         let m = self.stock_market.lock().unwrap();
         let mut selected_stocks: Vec<StockQuote> = Vec::new();
 
@@ -108,14 +110,8 @@ impl StockMarketSenderUDP {
             }
 
             if last_send.elapsed() > send_timeout {
-                match self.send_to(target_addr) {
-                    Ok(()) => {
-                        //TODO: add the ability to have logs here
-                        println!("Send most recent financial data");
-                    }
-                    Err(e) => {
-                        eprintln!("Error while sending the data to the UDP client: {}", e);
-                    }
+                if let Err(e) = self.send_to_udp(target_addr) {
+                    error!("Error while sending the data to the UDP client: {}", e);
                 }
                 last_send = Instant::now();
             }

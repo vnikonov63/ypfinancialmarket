@@ -1,4 +1,5 @@
 use log::{error, info, warn};
+use tracing::instrument;
 
 use std::{
     collections::HashSet,
@@ -15,6 +16,7 @@ use std::{
 use crate::stock::StockMarket;
 use crate::udpsender::StockMarketSenderUDP;
 
+#[instrument(skip(stream, stock_market))]
 pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
     let author = stream
         .peer_addr()
