@@ -3,3 +3,12 @@
 [ ] Scan the whole repository for unwraps and other possible panics.
 [ ] Add ability to provide a file for the client's tickers, that would be the default thing, and it would just allow you to write STREAM. The same logic should apply for the UDP clargument. If we write `STREAM 127.0.0.1:7879 AAPL,AMZN` use this. If we do the `STREAM` we should use the default clarguments.
 [ ] Create a README
+[ ] Update the structure of the project so it is, this way we do not need to repeat the StockQuote + it is good: 
+    |- bin/
+    |      |
+    |      |- server.rs 
+    |      |- client.rs 
+    |
+    |
+    |- lib.rs 
+    |- all the other corresponding modules 
