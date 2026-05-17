@@ -48,7 +48,6 @@ impl StockQuote {
 
     pub fn update_data(&mut self) -> u32 {
         // if price grows, so does the volume, people flock.
-
         let price_change_percent = Self::fake_random_percent(2.0);
         let volume_change_percent = Self::fake_random_percent(5.0);
 

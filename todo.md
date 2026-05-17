@@ -1,0 +1,4 @@
+- Add logging ability: both for the server and the client
+- Add features, random stuff should be truly random, but if we do not want that it should use Hashing and the `SystemTime` thing 
+- Scan the whole repository for unwraps and other possible panics.
+- Create a README

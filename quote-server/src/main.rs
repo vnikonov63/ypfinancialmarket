@@ -1,4 +1,5 @@
 use clap::Parser;
+use log::{debug, error, info, trace};
 
 use std::{
     net::{SocketAddr, TcpListener},
@@ -28,12 +29,16 @@ struct Args {
 }
 
 fn main() -> std::io::Result<()> {
+    // To see logs run with RUST_LOG=level_of_choice cargo run
+    // The selevs are LOWEST IMPORTANCE trace -> debug -> info -> warn -> error HIGHEST_IMPORTANCE
+    env_logger::init();
+
     let args = Args::parse();
     let listener = TcpListener::bind(args.addr_tcp)?;
-    println!("Server is listening on port 7878");
+    info!("Server is listening on port 7878");
 
     let stock_market = StockMarket::new(args.ticker_list_path)?;
-    println!("{:?}", stock_market);
+    trace!("{:?}", stock_market);
 
     let stock_market = Arc::new(Mutex::new(stock_market));
     let stock_market_update_thread = Arc::clone(&stock_market);
@@ -43,7 +48,8 @@ fn main() -> std::io::Result<()> {
             {
                 let mut market = stock_market_update_thread.lock().unwrap();
                 market.update();
-                println!("{:?}", market);
+                debug!("Stock Market auto update was successfull");
+                trace!("{:?}", market);
             }
 
             thread::sleep(Duration::from_secs(2));
@@ -53,13 +59,13 @@ fn main() -> std::io::Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                println!("Detected a new connection");
+                info!("Detected a new connection");
                 let stock_market = Arc::clone(&stock_market);
                 thread::spawn(move || {
                     handle_client(stream, stock_market);
                 });
             }
-            Err(e) => eprintln!("Connection failed: {}", e),
+            Err(e) => error!("Connection failed: {}", e),
         }
     }
 

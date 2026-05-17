@@ -1,3 +1,5 @@
+use log::{error, info, warn};
+
 use std::{
     collections::HashSet,
     io::{BufRead, BufReader, Write},
@@ -7,13 +9,18 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime},
 };
 
 use crate::stock::StockMarket;
 use crate::udpsender::StockMarketSenderUDP;
 
 pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
+    let author = stream
+        .peer_addr()
+        .map(|a| a.to_string())
+        .unwrap_or_else(|_| "unknown".to_string());
+
     let mut writer = stream.try_clone().expect("failed to clone stream");
     let mut reader = BufReader::new(stream);
 
@@ -44,6 +51,10 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                         let tickers = parts.next();
 
                         if let (Some(address), Some(tickers_str)) = (address, tickers) {
+                            info!(
+                                "From {} received valid STREAM request with parameters: {} {}",
+                                author, address, tickers_str
+                            );
                             let m = stock_market.lock().unwrap();
                             let mut tickers: HashSet<String> = HashSet::new();
                             let mut error: Option<String> = None;
@@ -93,18 +104,27 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                     if let Err(e) =
                                         sender.start_broadcasting_with_ping(&target, 1000)
                                     {
-                                        eprintln!("UDP broadcast error: {}", e);
+                                        error!("UDP broadcast error: {}", e);
                                     }
                                 });
                                 format!("2\nSubscribed to stream on port:\n{}\n", port)
                                 //"1\nSubscribed to stream\n".to_string()
                             }
                         } else {
+                            info!(
+                                "From {} received invalid STREAM request with parameters: {:?} {:?}",
+                                author, address, tickers
+                            );
                             "1\nERROR: usage STREAM udp://127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n>\n".to_string()
                         }
                     }
                     Some("GET") => {
-                        if let Some(ticker_str) = parts.next() {
+                        let ticker_str = parts.next();
+                        if let Some(ticker_str) = ticker_str {
+                            info!(
+                                "From {} received GET valid request with parameter: {}",
+                                author, ticker_str
+                            );
                             let ticker_str = ticker_str.trim();
                             let m = stock_market.lock().unwrap();
                             match m.stocks.get(ticker_str) {
@@ -112,11 +132,20 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                 None => "1\nERROR: ticker not found\n".to_string(),
                             }
                         } else {
+                            warn!(
+                                "From {} received GET invalid request with parameter: {:?}",
+                                author, ticker_str
+                            );
                             "1\nERROR: usage GET <ticker>\n".to_string()
                         }
                     }
                     Some("GET_MANY") => {
-                        if let Some(tickers_str) = parts.next() {
+                        let tickers_str = parts.next();
+                        if let Some(tickers_str) = tickers_str {
+                            info!(
+                                "From {} received valid GET_MANY request with parameter: {}",
+                                author, tickers_str
+                            );
                             let m = stock_market.lock().unwrap();
                             let tickers: Vec<&str> = tickers_str
                                 .split(',')
@@ -144,18 +173,26 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
 
                             result
                         } else {
+                            info!(
+                                "From {} received invalid GET_MANY request with parameter: {:?}",
+                                author, tickers_str
+                            );
                             "1\nERROR: usage GET_MANY <ticker-1>,<ticker-2>,...,<ticker-n>"
                                 .to_string()
                         }
                     }
                     Some("GET_TOTAL_VOLUME") => {
+                        info!("From {} received valid GET_TOTAL_VOLUME request", author);
                         let m = stock_market.lock().unwrap();
                         format!("1\n{}\n", m.total_volume)
                     }
+                    // this is just a proof of concept no need to take this too seriously
                     Some("LIST") => {
                         if let Some(_) = parts.next() {
+                            warn!("From {} recieved invalid LIST request", author);
                             "1\nERROR: usage LIST\n".to_string()
                         } else {
+                            info!("From {} recieved valid LIST request", author);
                             let m = stock_market.lock().unwrap();
                             let mut result = String::new();
                             for stock in m.stocks.values() {
@@ -166,8 +203,9 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                             result
                         }
                     }
-                    // TODO: maybe it is valid to put this inside the separate thread? 
+                    // TODO: maybe it is valid to put this inside the separate thread?
                     Some("PING_TCP") => {
+                        info!("From {} recieved valid PING_TCP request", author);
                         use std::collections::hash_map::DefaultHasher;
                         use std::hash::{Hash, Hasher};
 
@@ -184,14 +222,34 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                         "PONG\n".to_string()
                     }
                     Some("OPEN_UDP_CONNECTIONS") => {
-                        format!("1\n{}", udp_stop_flags.iter().filter(|stop_flag| !stop_flag.load(Ordering::Relaxed)).count())
+                        info!(
+                            "From {} recieved valid OPEN_UDP_CONNECTIONS request",
+                            author
+                        );
+                        format!(
+                            "1\n{}",
+                            udp_stop_flags
+                                .iter()
+                                .filter(|stop_flag| !stop_flag.load(Ordering::Relaxed))
+                                .count()
+                        )
                     }
-                    Some("ALL_UDP_CONNECTIONS") => format!("1\n{}", udp_stop_flags.len()),
+                    Some("ALL_UDP_CONNECTIONS") => {
+                        info!("From {} recieved valid ALL_UDP_CONNECTIONS request", author);
+                        format!("1\n{}", udp_stop_flags.len())
+                    }
                     // In out client we are sending the bye message, ni need to add anything in
                     // here. Although this may create complications when we are testing with nc
-                    Some("EXIT") => break,
+                    Some("EXIT") => {
+                        info!(
+                            "From {} recieved valid EXIT request\nShutting down.",
+                            author
+                        );
+                        break;
+                    }
                     Some("HELP") => {
-                            "12\nAvailable commands are:
+                        info!("From {} recieved valid HELP request", author);
+                        "12\nAvailable commands are:
                                 1. STREAM 127.0.0.1:<port_number> <ticker-1>,<ticker-2>,...,<ticker-n> - Create a 
                                     broadcast to the provided address where you will recieve live financial data 
                                     updates every second, excluding the first one.
@@ -205,7 +263,10 @@ pub fn handle_client(stream: TcpStream, stock_market: Arc<Mutex<StockMarket>>) {
                                 9. EXIT
                                 \n".to_string()
                     }
-                    _ => "1\nERROR: Unknown command\n".to_string(),
+                    _ => {
+                        warn!("From {} recieved invalid command", author);
+                        "1\nERROR: Unknown command\n".to_string()
+                    }
                 };
 
                 let _ = writer.write_all(response.as_bytes());
